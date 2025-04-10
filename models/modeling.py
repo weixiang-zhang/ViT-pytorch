@@ -267,11 +267,22 @@ class VisionTransformer(nn.Module):
         self.classifier = config.classifier
 
         self.transformer = Transformer(config, img_size, vis)
-        self.head = Linear(config.hidden_size, num_classes)
+        ###################  adding
+        self.inr_feature = config.inr_feature
+        if self.inr_feature == -1:
+            self.head = Linear(config.hidden_size, num_classes)
+        else:
+            self.inr_feat_layer = Linear(config.hidden_size, self.inr_feature)
+            self.head = Linear(config.inr_feature, num_classes)
 
     def forward(self, x, labels=None):
         x, attn_weights = self.transformer(x)
-        logits = self.head(x[:, 0])
+        ###################  adding
+        if self.inr_feature == -1:
+            logits = self.head(x[:, 0])
+        else:
+            feats = self.inr_feat_layer(x[:, 0])
+            logits = self.head(feats)
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
@@ -336,12 +347,17 @@ class VisionTransformer(nn.Module):
                         unit.load_from(weights, n_block=bname, n_unit=uname)
 
 
-CONFIGS = {
-    'ViT-B_16': configs.get_b16_config(),
-    'ViT-B_32': configs.get_b32_config(),
-    'ViT-L_16': configs.get_l16_config(),
-    'ViT-L_32': configs.get_l32_config(),
-    'ViT-H_14': configs.get_h14_config(),
-    'R50-ViT-B_16': configs.get_r50_b16_config(),
-    'testing': configs.get_testing(),
-}
+def get_configs(model_type, args):
+    CONFIGS = {
+        'ViT-B_16': configs.get_b16_config(inr_feature=args.inr_feature),
+        'ViT-B_32': configs.get_b32_config(),
+        'ViT-L_16': configs.get_l16_config(),
+        'ViT-L_32': configs.get_l32_config(),
+        'ViT-H_14': configs.get_h14_config(),
+        'R50-ViT-B_16': configs.get_r50_b16_config(),
+        'testing': configs.get_testing(),
+    }   
+    return CONFIGS[model_type]
+
+
+

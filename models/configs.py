@@ -31,7 +31,7 @@ def get_testing():
     return config
 
 
-def get_b16_config():
+def get_b16_config(inr_feature=-1):
     """Returns the ViT-B/16 configuration."""
     config = ml_collections.ConfigDict()
     config.patches = ml_collections.ConfigDict({'size': (16, 16)})
@@ -44,6 +44,8 @@ def get_b16_config():
     config.transformer.dropout_rate = 0.1
     config.classifier = 'token'
     config.representation_size = None
+    config.inr_feature = inr_feature
+    
     return config
 
 

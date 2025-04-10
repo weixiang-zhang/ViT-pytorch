@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from apex import amp
 from apex.parallel import DistributedDataParallel as DDP
 
-from models.modeling import VisionTransformer, CONFIGS
+from models.modeling import VisionTransformer, get_configs
 from utils.scheduler import WarmupLinearSchedule, WarmupCosineSchedule
 from utils.data_utils import get_loader
 from utils.dist_util import get_world_size
@@ -57,12 +57,18 @@ def save_model(args, model):
 
 def setup(args):
     # Prepare model
-    config = CONFIGS[args.model_type]
+    config = get_configs(args.model_type, args)
 
     num_classes = 10 if args.dataset == "cifar10" else 100
 
     model = VisionTransformer(config, args.img_size, zero_head=True, num_classes=num_classes)
-    model.load_from(np.load(args.pretrained_dir))
+    
+    if len(args.ckpt) > 0 :
+        # 此时设定 pretrained_dir 为ckpt
+        model.load_state_dict(torch.load(args.ckpt))
+    else:
+        model.load_from(np.load(args.pretrained_dir))
+    
     model.to(args.device)
     num_params = count_parameters(model)
 
@@ -170,6 +176,13 @@ def train(args, model):
     if args.local_rank != -1:
         model = DDP(model, message_size=250000000, gradient_predivide_factor=get_world_size())
 
+    # Test!
+    if args.test:
+        accuracy = valid(args, model, writer, test_loader, global_step=-1)
+        writer.close()
+        logger.info("End Testing!")
+        return
+    
     # Train!
     logger.info("***** Running training *****")
     logger.info("  Total optimization steps = %d", args.num_steps)
@@ -293,6 +306,13 @@ def main():
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
+    
+
+    ########## adding
+    parser.add_argument("--ckpt", type=str, default="")
+    parser.add_argument("--test", action="store_true")
+    parser.add_argument("--inr_feature", type=int, default=-1, help="-1为直接映射,不生成feature")
+
     args = parser.parse_args()
 
     # Setup CUDA, GPU & distributed training
@@ -322,6 +342,8 @@ def main():
 
     # Training
     train(args, model)
+    
+
 
 
 if __name__ == "__main__":
